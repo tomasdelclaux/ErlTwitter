@@ -38,7 +38,42 @@ handle_call({new_tweet, Tweet, Author}, _From, State=#state{tweets=TList})->
 handle_call({get_tweet, Tid}, _From, State=#state{tweets=TList})->
     Found = [X || X <- TList, X#tweet.id == Tid],
     FoundTweet = lists:nth(1,Found),
-    {reply, {FoundTweet#tweet.text, FoundTweet#tweet.author}, State}.
+    {reply, {FoundTweet#tweet.text, FoundTweet#tweet.author}, State};
+
+handle_call({get_hash, Hash}, _From, State=#state{tweets=TList,hashtags=HashList})->
+    io:format("Tweet State ~w~n", [State]),
+    Found = [X || X <- HashList, X#hash.tag == Hash],
+    case Found of
+        []->{reply, notFound, State};
+        _->
+            FoundHash=lists:nth(1,Found),
+            Tids=FoundHash#hash.ids,
+            Tweets=[get_tweet_info(X, TList) || X <- Tids],
+            Resp=[{X#tweet.id,X#tweet.author,X#tweet.text} || X <-Tweets],
+            {reply, {found, Resp}, State}
+    end;
+
+handle_call({get_mention, User}, _From, State=#state{tweets=TList,mentions=MentList})->
+    Found = [X || X <- MentList, X#mention.user == User],
+    case Found of
+        []->
+            {reply, notFound, State};
+        _->
+            FoundMent=lists:nth(1,Found),
+            Tids=FoundMent#mention.ids,
+            Tweets=[get_tweet_info(X, TList) || X <- Tids],
+            Resp=[{X#tweet.id,X#tweet.author,X#tweet.text} || X <-Tweets],
+            {reply, {found, Resp}, State}
+    end;
+
+handle_call({get_tweets, Tids}, _From, State=#state{tweets=TList})->
+    Tweets = [get_tweet_info(X, TList) || X <- Tids],
+    case Tweets of
+        []->{reply, notFound, State};
+        _->
+            Resp=[{X#tweet.id,X#tweet.author,X#tweet.text} || X <-Tweets],
+            {reply, {found, Resp}, State}
+    end.
 
 handle_cast({process_hash, Tweet, Id}, State=#state{hashtags=HashList})->
     Hash = get_hash(Tweet),
@@ -54,9 +89,9 @@ handle_cast({process_hash, Tweet, Id}, State=#state{hashtags=HashList})->
                 _->
                     FoundHash = lists:nth(1,Found),
                     PrevIdList = FoundHash#hash.ids,
-                    Update = FoundHash#hash{ids=PrevIdList++Id},
+                    Update = [FoundHash#hash{ids=PrevIdList++[Id]}],
                     OldList = lists:delete(FoundHash, HashList),
-                    {noReply, State#state{hashtags=OldList++Update}}
+                    {noreply, State#state{hashtags=OldList++Update}}
             end
     end;
 
@@ -65,7 +100,7 @@ handle_cast({process_mention, Tweet, Id}, State=#state{mentions=MentList})->
     case Mention of
         noMention->{noreply, State};
         _->
-            User=lists:delete("@", Mention),
+            User=string:slice(Mention,1),
             Found = [X || X <- MentList, X#mention.user == User],
             case Found of
                 []->
@@ -74,7 +109,7 @@ handle_cast({process_mention, Tweet, Id}, State=#state{mentions=MentList})->
                 _->
                     FoundMent = lists:nth(1,Found),
                     PrevIdList = FoundMent#mention.ids,
-                    Update = FoundMent#mention{ids=PrevIdList++Id},
+                    Update = [FoundMent#mention{ids=PrevIdList++[Id]}],
                     OldList = lists:delete(FoundMent, MentList),
                     {noreply, State#state{mentions=OldList++Update}}
             end
@@ -84,14 +119,15 @@ get_hash(Tweet)->
     A = string:find(Tweet, "#", trailing),
     case A of
         nomatch->noHash;
-        _->
-            A--string:find(A, " ", leading)
+        _->lists:nth(1,string:split(A, " "))
     end.
 
 get_mention(Tweet)->
     A = string:find(Tweet, "@", trailing),
     case A of
         nomatch->noMention;
-        _->
-            A--string:find(A, " ", leading)
+        _->lists:nth(1,string:split(A, " "))
     end.
+
+get_tweet_info(Tid, TList)->
+    lists:nth(1,[X || X <- TList, X#tweet.id == Tid]).

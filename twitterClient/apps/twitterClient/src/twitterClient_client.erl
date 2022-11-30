@@ -12,6 +12,9 @@ init({Username, Port,Ip})->
     {ok,Sock} = gen_tcp:connect(Ip,8000,[{active,once},{packet,2}]),
     {ok, #state{username=Username, socket=Sock}}.
 
+terminate(Reason, Args)->
+    io:format("Client Conection Closed...~n").
+
 %%%%% HANDLE CLIENT CALLS
 
 %%%Register a new user
@@ -44,8 +47,8 @@ handle_cast({get_hash, Hash}, State=#state{socket=Sock})->
     gen_tcp:send(Sock, "GETHASH"++Hash),
     {noreply, State};
 
-handle_cast({get_mention, Ment}, State=#state{socket=Sock, username=User})->
-    gen_tcp:send(Sock, "GETMENT"++Ment++"|"++User),
+handle_cast({get_mention}, State=#state{socket=Sock, username=User})->
+    gen_tcp:send(Sock, "GETMENT"++User),
     {noreply, State}.
 
 %%%%Process Server Responses
@@ -90,6 +93,22 @@ handle_info({tcp, Sock, "TWEET: "++Vars}, State) ->
     inet:setopts(Sock,[{active,once}]),
     [FromU, Tid, Tweet]=string:tokens(Vars, "|"),
     io:format("Tweet: ~s~nFrom: ~s~nText: ~s~n", [Tid,FromU,Tweet]),
-    {noreply, State}.
+    {noreply, State};
+
+handle_info({tcp, Sock, "notFound query"}, State)->
+    inet:setopts(Sock,[{active,once}]),
+    io:format("tweets not found for this query~n"),
+    {noreply, State};
+
+%%DISCONNECTS
+
+%% DISCONNECTS
+handle_info({tcp, Socket, "DISCONNECT"}, State) ->
+  gen_tcp:close(Socket),
+  {stop, normal, State};
+
+handle_info({tcp_closed, _Socket}, State) -> {stop, normal, State};
+handle_info({tcp_error, _Socket, _}, State) -> {stop, normal, State}.
+
 
 

@@ -52,6 +52,17 @@ handle_call({subscribe, User, ToUser}, _From, State=#state{users=Ulist})->
             io:format("new items ~w~n", [NewItem]),
             OldList = lists:delete(FoundUser,Ulist),
             {reply, subscribed, State#state{users=OldList++NewItem}}
+    end;
+
+handle_call({get_tweets, User}, _From, State=#state{users=Ulist})->
+    Found = [X || X <- Ulist, X#user.name == User],
+    case Found of
+        []->{reply, notFound,State};
+        _->
+            FoundUser= lists:nth(1,Found),
+            Tids=FoundUser#user.myTweets,
+            Resp = gen_server:call(twitter_tweets,{get_tweets, Tids}),
+            {reply, Resp, State}
     end.
 
 handle_cast({retweet, User, Tid}, State=#state{users=Ulist})->
@@ -99,6 +110,7 @@ handle_cast({get_subs, Tweet, Author, Tid, Subscribers}, State=#state{users=Ulis
     [gen_server:cast(X,{send_tweet, Tweet, Author, Tid}) || {X,_} <- SubSocks],
     [gen_server:cast(twitter_users, {add_tweet, Tid, X}) || X <- Subscribers],
     {noreply, State};
+
 
 %%%%% DEBUG
 handle_cast({printUsers}, State=#state{users=Ulist})->

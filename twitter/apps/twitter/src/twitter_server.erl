@@ -16,7 +16,7 @@ init(LSock) ->
     {ok, #state{socket=LSock}}.
 
 terminate(Reason, Args)->
-    io:format("Terminating Twitter Server...~n").
+    io:format("Server Conection Closed...~n").
 
 %% API FUNCTIONS
 
@@ -62,10 +62,40 @@ handle_info({tcp, Socket, "RETWEET"++Vars}, State)->
     gen_server:cast(twitter_users, {retweet, User, list_to_integer(Tid)}),
     {noreply, State};
 
-handle_info({tcp, Socket, "GETTWEET"++User}, State)->
+handle_info({tcp, Socket, "GETTWEETS"++User}, State)->
     inet:setopts(Socket, [{active, once}]),
-    gen_server:calls(twitter_users, {get_tweets, User}),
+    Resp=gen_server:call(twitter_users, {get_tweets, User}),
+    case Resp of
+        notFound->gen_tcp:send(Socket, "notFound query");
+        {found,Tweets}->send_tweets(Socket,Tweets)
+    end,
     {noreply, State};
+
+handle_info({tcp, Socket, "GETHASH"++Hash}, State)->
+    inet:setopts(Socket, [{active, once}]),
+    Resp=gen_server:call(twitter_tweets, {get_hash, Hash}),
+    case Resp of
+        notFound->gen_tcp:send(Socket, "notFound query");
+        {found,Tweets}->send_tweets(Socket,Tweets)
+    end,
+    {noreply, State};
+
+handle_info({tcp, Socket, "GETMENT"++User}, State)->
+    inet:setopts(Socket, [{active, once}]),
+    Resp=gen_server:call(twitter_tweets, {get_mention, User}),
+    case Resp of
+        notFound->gen_tcp:send(Socket, "notFound query");
+        {found,Tweets}->send_tweets(Socket,Tweets)
+    end,
+    {noreply, State};
+
+%% DISCONNECTS
+handle_info({tcp, Socket, "DISCONNECT"}, State) ->
+  gen_tcp:close(Socket),
+  {stop, normal, State};
+
+handle_info({tcp_closed, _Socket}, State) -> {stop, normal, State};
+handle_info({tcp_error, _Socket, _}, State) -> {stop, normal, State};
 
 %Debuggin call
 handle_info({tcp, Socket, "PRINT USERS"}, State)->
@@ -83,3 +113,6 @@ handle_cast({send_tweet, Tweet, FromU, Tid}, State=#state{socket=Socket})->
     gen_tcp:send(Socket, "TWEET: "++FromU++"|"++integer_to_list(Tid)++"|"++Tweet),
     io:format("sent twit~n"),
     {noreply, State}.
+
+send_tweets(Socket, Tweets)->
+    [gen_tcp:send(Socket, "TWEET: "++Y++"|"++integer_to_list(X)++"|"++Z) || {X,Y,Z} <- Tweets].
