@@ -56,9 +56,15 @@ handle_info({tcp, Socket, "TWEET"++Vars}, State)->
     gen_server:cast(twitter_users, {tweet, User, Tweet}),
     {noreply, State};
 
-handle_info({tcp, Socket, "RETWEET"++Tid}, State)->
-    inet:setopt(Socket, [{active, once}]),
-    gen_server:call(twitter_users, {retweet, Tid}),
+handle_info({tcp, Socket, "RETWEET"++Vars}, State)->
+    inet:setopts(Socket, [{active, once}]),
+    [User,Tid]=string:tokens(Vars, "|"),
+    gen_server:cast(twitter_users, {retweet, User, list_to_integer(Tid)}),
+    {noreply, State};
+
+handle_info({tcp, Socket, "GETTWEET"++User}, State)->
+    inet:setopts(Socket, [{active, once}]),
+    gen_server:calls(twitter_users, {get_tweets, User}),
     {noreply, State};
 
 %Debuggin call

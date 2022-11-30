@@ -18,11 +18,11 @@ init({Username, Port,Ip})->
 handle_cast({register, User}, State=#state{socket=Sock})->
     io:format("Sending User ~s to be registered ~n", [User]),
     gen_tcp:send(Sock, "REGISTER"++User),
-    {noreply, State};
+    {noreply, State#state{socket=Sock}};
 
 handle_cast({connect, User}, State=#state{socket=Sock})->
     gen_tcp:send(Sock, "CONNECT" ++ User),
-    {noreply, State};
+    {noreply, State#state{socket=Sock}};
 
 handle_cast({subscribe, ToUser}, State=#state{socket=Sock, username=User})->
     gen_tcp:send(Sock, "SUBSCRIBE"++User++"|"++ToUser),
@@ -32,8 +32,20 @@ handle_cast({tweet, Msg}, State=#state{socket=Sock,username=User})->
     gen_tcp:send(Sock, "TWEET"++User++"|"++Msg),
     {noreply, State};
 
-handle_cast({retweet, Tid}, State=#state{socket=Sock})->
-    gen_tcp:sned(Sock, "RETWEET"++Tid),
+handle_cast({retweet, Tid}, State=#state{socket=Sock, username=User})->
+    gen_tcp:send(Sock, "RETWEET"++User++"|"++integer_to_list(Tid)),
+    {noreply, State};
+
+handle_cast({get_my_tweets}, State=#state{socket=Sock, username=User})->
+    gen_tcp:send(Sock, "GETTWEETS"++User),
+    {noreply, State};
+
+handle_cast({get_hash, Hash}, State=#state{socket=Sock})->
+    gen_tcp:send(Sock, "GETHASH"++Hash),
+    {noreply, State};
+
+handle_cast({get_mention, Ment}, State=#state{socket=Sock, username=User})->
+    gen_tcp:send(Sock, "GETMENT"++Ment++"|"++User),
     {noreply, State}.
 
 %%%%Process Server Responses
@@ -50,7 +62,7 @@ handle_info({tcp, Sock, "NotRegistered"}, State)->
 handle_info({tcp, Sock, "Connected"++User}, State)->
     inet:setopts(Sock,[{active,once}]),
     io:format("~s connected~n", [User]),
-    {noreply, State#state{username=User}};
+    {noreply, State#state{username=User, socket=Sock}};
 
 handle_info({tcp, Sock, "UserNotFound"++User}, State)->
     inet:setopts(Sock,[{active,once}]),
