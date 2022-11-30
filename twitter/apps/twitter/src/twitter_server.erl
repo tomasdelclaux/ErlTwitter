@@ -92,7 +92,7 @@ handle_info({tcp, Socket, "GETMENT"++User}, State)->
 %% DISCONNECTS
 handle_info({tcp, Socket, "DISCONNECT"}, State) ->
   gen_tcp:close(Socket),
-  {stop, normal, State};
+  {noreply, State};
 
 handle_info({tcp_closed, _Socket}, State) -> {stop, normal, State};
 handle_info({tcp_error, _Socket, _}, State) -> {stop, normal, State};
@@ -112,6 +112,7 @@ handle_cast(accept, State=#state{socket=LSock})->
 handle_cast({send_tweet, Tweet, FromU, Tid}, State=#state{socket=Socket})->
     gen_tcp:send(Socket, "TWEET: "++FromU++"|"++integer_to_list(Tid)++"|"++Tweet),
     io:format("sent twit~n"),
+    gen_server:cast(self(), accept),
     {noreply, State}.
 
 send_tweets(Socket, Tweets)->

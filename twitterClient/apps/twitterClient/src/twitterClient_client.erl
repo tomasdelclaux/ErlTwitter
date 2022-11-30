@@ -16,6 +16,10 @@ terminate(Reason, Args)->
     io:format("Client Conection Closed...~n").
 
 %%%%% HANDLE CLIENT CALLS
+handle_call({disconnect},_From, State=#state{socket=Sock})->
+    gen_tcp:send(Sock, "DISCONNECT"),
+    gen_tcp:close(Sock),
+    {reply, "Disconnected", State}.
 
 %%%Register a new user
 handle_cast({register, User}, State=#state{socket=Sock})->
@@ -100,13 +104,7 @@ handle_info({tcp, Sock, "notFound query"}, State)->
     io:format("tweets not found for this query~n"),
     {noreply, State};
 
-%%DISCONNECTS
-
 %% DISCONNECTS
-handle_info({tcp, Socket, "DISCONNECT"}, State) ->
-  gen_tcp:close(Socket),
-  {stop, normal, State};
-
 handle_info({tcp_closed, _Socket}, State) -> {stop, normal, State};
 handle_info({tcp_error, _Socket, _}, State) -> {stop, normal, State}.
 
