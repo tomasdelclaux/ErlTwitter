@@ -1,0 +1,6 @@
+-sname twitterClient
+
+-setcookie twitterClient_cookie
+
++K true
++A30
