@@ -271,17 +271,17 @@ The simulation was then run using:
 The simulation takes into account users with many subscribers tweeting more than the rest, and also takes into consideration periods of live connections and periods where the user is disconnected. Additionally, the number of subscribers each user has follows a zipf distribution where the firt user has the most subscribers, the next one half of the first, the next one a third, then a fourth and so on.
 
 ```
-    Periods=lists:nth(rand:uniform(?NUM), ?PERIODS),
-    State=#state{id=NumNodes, periods=Periods, subscribers=round(TotalNodes/I), period=1, time=0, disc=true},
-    start(NumNodes, State),
-    start_clients(NumNodes-1, I+1, TotalNodes).
-
+Periods=lists:nth(rand:uniform(?NUM), ?PERIODS),
+State=#state{id=NumNodes, periods=Periods, subscribers=round(TotalNodes/I), period=1, time=0, disc=true},
+start(NumNodes, State),
+start_clients(NumNodes-1, I+1, TotalNodes).
 ```
 
 It does this by specifying the amount of subscribers above which a user would be a frequent tweeter in the simulation, and also using a list with integers representing minutes where the user is connected and active. The integers that are negative represent time intervals where the user is inactive.
 
 In simulation.erl this parameters are defined here:
-````
+
+```
 -define(MANYSUBS, 40).
 -define(PERIODS, [[5,-1,15, -2,10], [-2,13,-3,8,10], [4,-1,1,-8,15],[2,-1,7,-3,17],[1,15,-4,11,-1]]).
 -define(NUM, 5).
