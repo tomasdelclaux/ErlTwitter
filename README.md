@@ -1,5 +1,8 @@
-# twitter
+# TWITTER CLONE
 Erlang twitter engine, server and client
+
+# Authors
+Tomas Delclaux Rodriguez-Rey and Ariel Weitzenfeld
 
 # Introduction
 The project consists of a twitter clone in erlang. There is a server to process requests and a client to send them.
