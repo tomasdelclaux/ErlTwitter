@@ -116,7 +116,8 @@ handle_info({tcp, Sock, "TWEET: "++Vars}, State=#state{test=Flag}) ->
                              whereis(twitter_tracker) ! {retweet},
                             {noreply, State};
                 true->  {noreply, State}
-            end
+            end;
+        false->{noreply, State}
     end;
 
 handle_info({tcp, Sock, "notFound query"}, State)->
