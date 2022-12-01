@@ -18,5 +18,5 @@ start_socket() ->
   supervisor:start_child(?MODULE, []).
 
 empty_listeners() ->
-  [start_socket() || _ <- lists:seq(1,20)],
+  [start_socket() || _ <- lists:seq(1,500)],
   ok.

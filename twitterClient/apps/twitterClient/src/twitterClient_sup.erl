@@ -18,6 +18,6 @@ init({Username,Port, Ip}) ->
     SupFlags = #{strategy => one_for_all,
                  intensity => 0,
                  period => 1},
-    ClientSpecs = {twitterClient_client, {twitterClient_client, start_link, [Username,Port,Ip]}, permanent, 2000, worker, [twitterClient_client]},
+    ClientSpecs = {twitterClient_client, {twitterClient_client, start_link, [Username,Port,Ip, false]}, permanent, 2000, worker, [twitterClient_client]},
     {ok, {SupFlags, [ClientSpecs]}}.
 
