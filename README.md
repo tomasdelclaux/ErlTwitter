@@ -20,7 +20,7 @@ Both the twitter client and server are OTP applications and follow OTP supervisi
 ## Twitter Server
 It consits of three supervisors:
 - A supervisor for the actor in charge of user data
-- A supervisor for the actro in chager of tweets data
+- A supervisor for the actor in chager of tweets data
 - A supervisor for the actors accepting tcp connections from clients
 
 The OTP tree for this application can be seen in the screenshot below:
