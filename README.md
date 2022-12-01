@@ -25,7 +25,7 @@ It consits of three supervisors:
 
 The OTP tree for this application can be seen in the screenshot below:
 
-![Alt text](./img/architectute.png "Twitter Server")
+![Alt text](./img/architecture.png "Twitter Server")
 
 ## Twitter Client
 It consists of a single supervisor monitoring the client process.
