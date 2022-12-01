@@ -21,9 +21,9 @@ The server supports:
 Both the twitter client and server are OTP applications and follow OTP supervision tree structure.
 
 ## Twitter Server
-It consits of three supervisors:
+It consists of three supervisors:
 - A supervisor for the actor in charge of user data
-- A supervisor for the actor in chager of tweets data
+- A supervisor for the actor in charge of tweets data
 - A supervisor for the actors accepting tcp connections from clients
 
 The OTP tree for this application can be seen in the screenshot below:
@@ -201,7 +201,7 @@ Text: Hello, I am a #monsters
 
 ### Example 4 (Miscellaneous)
 Disconnecting and Reconnecting
-State is kept in server if it hasnt been restarted.
+State is kept on the server if it hasn't been restarted.
 
 ```
 6> gen_server:cast(twitterClient_client,{disconnect}).   
@@ -252,7 +252,7 @@ Simulation Time(mins): 1.0323200766333334
 The capacity of the server depends greatly on the number of actor processes that
 are spawned, in particular to handle the tcp connections.
 
-It was possible to configure the twitter_server_sup process to run with 500 tcp handling workers and thus run the simulatio for 400 users. This was done running all processes for client and server on a macbook pro m1.
+It was possible to configure the twitter_server_sup process to run with 500 tcp handling workers and thus run the simulation for 400 users. This was done running all processes for client and server on a macbook pro m1.
 
 Greater performance can be seen using more tcp handlers, which can be adjusted on
 the following line of the file twitter_server_sup.erl:
@@ -268,7 +268,7 @@ The simulation was then run using:
 2> simulation:start(400).
 ```
 
-The simulation takes into account users with many subscribers tweeting more than the rest, and also takes into consideration periods of live connections and periods where the user is disconnected. Additionally, the number of subscribers each user has follows a zipf distribution where the firt user has the most subscribers, the next one half of the first, the next one a third, then a fourth and so on.
+The simulation takes into account users with many subscribers tweeting more than the rest, and also takes into consideration periods of live connections and periods where the user is disconnected. Additionally, the number of subscribers each user has follows a zipf distribution where the first user has the most subscribers, the next one half of the first, the next one a third, then a fourth and so on.
 
 ```
 Periods=lists:nth(rand:uniform(?NUM), ?PERIODS),
@@ -307,7 +307,7 @@ Simulation Time(mins): 16.91827317285
 ## Fault Tolerance
 Additionally the code was measured for tolerance, which is just as important in measuring performance as is capacity.
 
-In order to this, with a capacity of 500 tcp handlers, three sperate shells were
+In order to this, with a capacity of 500 tcp handlers, three separate shells were
 run; each one running the client simulator with a number of client processes.
 
 This example was run with the following parameters:
@@ -407,3 +407,5 @@ sent twit
 ```
 
 The reason for this is because of the OTP supervision tree structure and the fact that users and tweets are actors only accessed through the server workers, which are isolated from one another, meaning if one fails, other clients are not affected.
+
+
