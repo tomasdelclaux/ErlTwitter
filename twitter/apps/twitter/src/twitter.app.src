@@ -5,6 +5,8 @@
   {mod, {twitter_app, []}},
   {applications,
    [kernel,
+    cowboy,
+    jiffy,
     stdlib
    ]},
   {env,[]},
