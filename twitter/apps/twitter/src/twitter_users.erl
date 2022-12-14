@@ -25,18 +25,18 @@ terminate(Reason, Args)->
 
 %% HANDLE SYNCHRONOUS CALLS
 
-handle_call({register, User}, From, State=#state{users=Ulist})->
-    io:format("Registering New User ~s from ~w ~n", [User,From]),
-    NewUser = [#user{name=User,conn=From, subscribers=[],myTweets=[]}],
+handle_call({register, User, Ws}, _From, State=#state{users=Ulist})->
+    io:format("Registering New User ~s from ~w ~n", [User,Ws]),
+    NewUser = [#user{name=User,conn=Ws, subscribers=[],myTweets=[]}],
     {reply, created, State#state{users=Ulist++NewUser}};
 
-handle_call({connect, User}, From, State=#state{users=Ulist})->
+handle_call({connect, User, Ws}, _From, State=#state{users=Ulist})->
     Found = [X || X <- Ulist, X#user.name == User],
     case Found of
         []->{reply, userNotFound, State};
         _->
             FoundUser = lists:nth(1,Found),
-            NewItem = [FoundUser#user{conn=From}],
+            NewItem = [FoundUser#user{conn=Ws}],
             OldList = lists:delete(FoundUser,Ulist),
             {reply, connected, State#state{users=OldList++NewItem}}
     end;
@@ -107,7 +107,7 @@ handle_cast({get_subs, Tweet, Author, Tid, Subscribers}, State=#state{users=Ulis
     io:format("Subscribers ~w~n", [Subscribers]),
     SubSocks =  [getUser(X, Ulist) || X <- Subscribers],
     io:format("Sub Socks ~w~n", [SubSocks]),
-    [gen_server:cast(X,{send_tweet, Tweet, Author, Tid}) || {X,_} <- SubSocks],
+    [X ! {send_tweet, Tweet, Author, Tid} || X <- SubSocks],
     [gen_server:cast(twitter_users, {add_tweet, Tid, X}) || X <- Subscribers],
     {noreply, State};
 
