@@ -5,6 +5,7 @@
   {mod, {twitterClient_app, []}},
   {applications,
    [kernel,
+    gun,
     stdlib
    ]},
   {env,[]},

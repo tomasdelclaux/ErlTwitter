@@ -6,7 +6,6 @@
 
 
 init(Req, Opts) ->
-    io:format("Listening at ~w~n",[self()]),
 	{cowboy_websocket, Req, Opts}.
 
 websocket_init(State) ->
@@ -19,7 +18,10 @@ websocket_handle({text, Json}, State) ->
     io:format("command ~w~n", [Command]),
     Vars= maps:get(<<"vars">>, Map),
     {{text,Res},_}=websocket_handle_({text, {Command, Vars}}, State),
-    {[{text, Res}], State}.
+    {[{text, Res}], State};
+
+websocket_handle(_Data, State) ->
+	{[], State}.
 
 websocket_handle_({text, {register, [User|_]}}, State=#connections{ws=Ws}) ->
     Resp=gen_server:call(twitter_users, {register, User, Ws}),
@@ -75,7 +77,7 @@ websocket_handle_({text, {getTweets, [User|_]}}, State) ->
             Data = #{status => <<"got tweets">>, tweets=>[]},
             {{text, jiffy:encode(Data)}, State};
         {found,Tweets}->
-            TJson = [#{id=>X, author=>Y, tweet=>Z} || {X,Y,Z}<-Tweets],
+            TJson = [#{tid=>X, from=>Y, tweet=>Z} || {X,Y,Z}<-Tweets],
             Data = #{status => <<"got tweets">>, tweets=>TJson},
             {{text, jiffy:encode(Data)}, State}
     end;
@@ -87,7 +89,7 @@ websocket_handle_({text, {getHash, [Hash|_]}}, State) ->
             Data = #{status => <<"hash not found">>, tweets=>[]},
             {{text, jiffy:encode(Data)}, State};
         {found,Tweets}->
-            TJson = [#{id=>X, author=>Y, tweet=>Z} || {X,Y,Z}<-Tweets],
+            TJson = [#{tid=>X, from=>Y, tweet=>Z} || {X,Y,Z}<-Tweets],
             Data = #{status => <<"hash found">>, tweets=>TJson},
             {{text, jiffy:encode(Data)}, State}
     end;
@@ -99,7 +101,7 @@ websocket_handle_({text, {getMention, [User|_]}}, State) ->
             Data = #{status => <<"mention not found">>, tweets=>[]},
             {{text, jiffy:encode(Data)}, State};
         {found,Tweets}->
-            TJson = [#{id=>X, author=>Y, tweet=>Z} || {X,Y,Z}<-Tweets],
+            TJson = [#{tid=>X, from=>Y, tweet=>Z} || {X,Y,Z}<-Tweets],
             Data = #{status => <<"mention found">>, tweets=>TJson},
             {{text, jiffy:encode(Data)}, State}
     end.

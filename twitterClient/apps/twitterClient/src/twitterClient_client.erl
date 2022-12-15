@@ -1,131 +1,160 @@
 -module(twitterClient_client).
 -compile(export_all).
 -compile(gen_server).
--define(PROB_RETWEET,10).
--record(state, {username,socket, test, ip}).
+-record(state, {username,port,ip,conn, stream}).
 
-%client needs two actors too - one for receive and one for sending
-start_link(Username, Port, Ip, Debug)->
-    case Debug of
-        true->gen_server:start_link({local, list_to_atom("sim_client_"++Username)},?MODULE, {Username, Port,Ip, true},[]);
-        _->gen_server:start_link({local, ?MODULE},?MODULE, {Username, Port,Ip, false},[])
-    end.
+start_link(Username, Port, Ip)->
+    gen_server:start_link({local, ?MODULE},?MODULE, {Username, Port,Ip},[]).
 
-init({Username, Port,Ip, Flag})->
-    io:format("starting client connection...~n"),
-    {ok, Sock} = gen_tcp:connect(Ip,8000,[{active,once},{packet,2}]),
-    {ok, #state{username=Username, socket=Sock, test=Flag, ip=Ip}}.
+init({Username, Port,Ip})->
+    {ok, ConnPid} = gun:open("127.0.0.1", 8080, #{
+		ws_opts => #{
+			keepalive => 100,
+			silence_pings => false
+		}
+	}),
+    {ok, _} = gun:await_up(ConnPid),
+	StreamRef = gun:ws_upgrade(ConnPid, "/", []),
+	{upgrade, [<<"websocket">>], _} = gun:await(ConnPid, StreamRef),
+    State=#state{username=Username, conn=ConnPid, stream=StreamRef},
+    {ok, State}.
 
-terminate(Reason, Args)->
-    io:format("Client Conection Closed ~s...~n", [Reason]).
+handle_info({gun_ws, PId, Ref, {_, Msg}}, State)->
+    Map=jiffy:decode(Msg, [return_maps]),
+    prettyPrint(Map),
+    {noreply, State#state{conn=PId}};
 
-%%%%% HANDLE CLIENT CALLS
-handle_cast({disconnect}, State=#state{socket=Sock})->
-    gen_tcp:send(Sock, "DISCONNECT"),
-    S=gen_tcp:close(Sock),
-    {noreply, State#state{socket=S}};
+handle_info({gun_upgrade, PId, Ref, _, _}, State)->
+    {noreply, State#state{conn=PId}};
 
-%%%Register a new user
-handle_cast({register, User}, State=#state{socket=Sock})->
+handle_info({gun_up, PId, http}, State) ->
+    io:format("Server is Up~n"),
+    error_logger:info_msg("apns up:~p", [PId]),
+    {noreply, State#state{conn=PId}};
+
+handle_info({gun_ws, PId, Ref, {_, Msg, _}}, State)->
+    io:format("Closing...~n"),
+    {noreply, State#state{conn=PId}};
+
+handle_info({gun_ws, PId, Ref, pong}, State)->
+    {noreply, State#state{conn=PId}};
+
+handle_info({gun_down, PId, _, _, _}, State) ->
+    io:format("Connection got close~n"),
+    io:format("try to reconnect...~n"),
+    {ok, ConnPid} = gun:open("127.0.0.1", 8080, #{
+		ws_opts => #{
+			keepalive => 100,
+			silence_pings => false
+		}
+	}),
+    {ok, _} = gun:await_up(ConnPid),
+	StreamRef = gun:ws_upgrade(ConnPid, "/", []),
+    {upgrade, [<<"websocket">>], _} = gun:await(ConnPid, StreamRef),
+    {noreply, #state{conn=ConnPid}}.
+
+handle_cast({register, User}, State=#state{conn=C, stream=S})->
     io:format("Sending User ~s to be registered ~n", [User]),
-    gen_tcp:send(Sock, "REGISTER"++User),
-    {noreply, State#state{socket=Sock}};
-
-handle_cast({connect, User}, State)->
-    IsOpen = State#state.socket,
-    case IsOpen of
-        ok->{ok,Sock} = gen_tcp:connect(State#state.ip,8000,[{active,once},{packet,2}]);
-        _->Sock=State#state.socket
-    end,
-    gen_tcp:send(Sock, "CONNECT" ++ User),
-    {noreply, State#state{socket=Sock}};
-
-handle_cast({subscribe, ToUser}, State=#state{socket=Sock, username=User})->
-    gen_tcp:send(Sock, "SUBSCRIBE"++User++"|"++ToUser),
-    {noreply, State};
-
-handle_cast({tweet, Msg}, State=#state{socket=Sock,username=User})->
-    gen_tcp:send(Sock, "TWEET"++User++"|"++Msg),
-    {noreply, State};
-
-handle_cast({retweet, Tid}, State=#state{socket=Sock, username=User})->
-    gen_tcp:send(Sock, "RETWEET"++User++"|"++integer_to_list(Tid)),
-    {noreply, State};
-
-handle_cast({get_my_tweets}, State=#state{socket=Sock, username=User})->
-    gen_tcp:send(Sock, "GETTWEETS"++User),
-    {noreply, State};
-
-handle_cast({get_hash, Hash}, State=#state{socket=Sock})->
-    gen_tcp:send(Sock, "GETHASH"++Hash),
-    {noreply, State};
-
-handle_cast({get_mention}, State=#state{socket=Sock, username=User})->
-    gen_tcp:send(Sock, "GETMENT"++User),
-    {noreply, State}.
-
-%%%%Process Server Responses
-handle_info({tcp, Sock, "UserRegistered"++User}, State)->
-    inet:setopts(Sock,[{active,once}]),
-    io:format("New User ~s registered~n", [User]),
+    Data=#{command => <<"register">>, vars=>[User]},
+    gun:ws_send(C, S, {text, jiffy:encode(Data)}),
     {noreply, State#state{username=User}};
 
-handle_info({tcp, Sock, "NotRegistered"}, State)->
-    inet:setopts(Sock,[{active,once}]),
-    io:format("Unable to Register~n"),
+handle_cast({connect, User}, State=#state{conn=C, stream=S})->
+    io:format("Connection as ~s~n", [User]),
+    Data=#{command => <<"connect">>, vars=>[User]},
+    gun:ws_send(C, S, {text, jiffy:encode(Data)}),
     {noreply, State};
 
-handle_info({tcp, Sock, "Connected"++User}, State)->
-    inet:setopts(Sock,[{active,once}]),
-    io:format("~s connected~n", [User]),
-    {noreply, State#state{username=User, socket=Sock}};
-
-handle_info({tcp, Sock, "UserNotFound"++User}, State)->
-    inet:setopts(Sock,[{active,once}]),
-    io:format("~s not registered~n", [User]),
+handle_cast({subscribe, ToUser}, State=#state{conn=C, stream=S, username=User})->
+    Data=#{command => <<"subscribe">>, vars=>[User, ToUser]},
+    gun:ws_send(C, S, {text, jiffy:encode(Data)}),
     {noreply, State};
 
-handle_info({tcp, Sock, "NotConnected"++User}, State)->
-    inet:setopts(Sock,[{active,once}]),
-    io:format("~s not connected~n", [User]),
+handle_cast({tweet, Msg}, State=#state{conn=C, stream=S,username=User})->
+    Data=#{command => <<"tweet">>, vars=>[User, Msg]},
+    gun:ws_send(C, S, {text, jiffy:encode(Data)}),
     {noreply, State};
 
-handle_info({tcp, Sock, "Subscribed"++Vars}, State)->
-    inet:setopts(Sock,[{active,once}]),
-    [User,ToUser]=string:tokens(Vars, "|"),
-    io:format("~s subscribed to ~s~n", [User, ToUser]),
+handle_cast({retweet, Tid}, State=#state{conn=C, stream=S, username=User})->
+    Data=#{command => <<"retweet">>, vars=>[User, integer_to_list(Tid)]},
+    gun:ws_send(C, S, {text, jiffy:encode(Data)}),
     {noreply, State};
 
-handle_info({tcp, Sock, "Not Subscribed"++Vars}, State)->
-    inet:setopts(Sock,[{active,once}]),
-    [User,ToUser]=string:tokens(Vars, "|"),
-    io:format("~s unable to subscribe to ~s~n", [User, ToUser]),
+handle_cast({get_my_tweets}, State=#state{conn=C, stream=S, username=User})->
+    Data=#{command => <<"getTweets">>, vars=>[User]},
+    gun:ws_send(C, S, {text, jiffy:encode(Data)}),
     {noreply, State};
 
-handle_info({tcp, Sock, "TWEET: "++Vars}, State=#state{test=Flag}) ->
-    inet:setopts(Sock,[{active,once}]),
-    [FromU, Tid, Tweet]=string:tokens(Vars, "|"),
-    io:format("Tweet: ~s~nFrom: ~s~nText: ~s~n", [Tid,FromU,Tweet]),
-    
-    %%CHECK RETWEET PROB FOR SIMULATION
-    case Flag of
-        true->
-            I = rand:uniform(?PROB_RETWEET),
-            if
-                I == 1 -> gen_server:cast(self(), {retweet, list_to_integer(Tid)}),
-                             whereis(twitter_tracker) ! {retweet},
-                            {noreply, State};
-                true->  {noreply, State}
-            end;
-        false->{noreply, State}
-    end;
-
-handle_info({tcp, Sock, "notFound query"}, State)->
-    inet:setopts(Sock,[{active,once}]),
-    io:format("tweets not found for this query~n"),
+handle_cast({get_hash, Hash}, State=#state{conn=C, stream=S})->
+    Data=#{command => <<"getHash">>, vars=>[Hash]},
+    gun:ws_send(C, S, {text, jiffy:encode(Data)}),
     {noreply, State};
 
-%% DISCONNECTS
-handle_info({tcp_closed, _Socket}, State) -> {stop, normal, State}.
+handle_cast({get_mention}, State=#state{conn=C, stream=S, username=User})->
+    Data=#{command => <<"getMention">>, vars=>[User]},
+    gun:ws_send(C, S, {text, jiffy:encode(Data)}),
+    {noreply, State};
 
+handle_cast(_, State)->
+    io:format("Please pass a valid command~n"),
+    {noreply, State}.
+
+
+prettyPrint(Map)->
+    Status=maps:get(<<"status">>, Map),
+    case Status of
+        <<"UserRegistered">>->
+            User=maps:get(<<"user">>, Map),
+            io:format("Registered user ~s~n", [User]);
+        <<"NotRegistered">>->
+            User=maps:get(<<"user">>, Map),
+            io:format("unable to register user ~s~n", [User]);
+        <<"Connected">>->
+            User=maps:get(<<"user">>, Map),
+            io:format("connected user ~s~n", [User]);
+        <<"UserNotFound">>->
+            User=maps:get(<<"user">>, Map),
+            io:format("user ~s not found~n", [User]);
+        <<"NotConnected">>->
+            User=maps:get(<<"user">>, Map),
+            io:format("user ~s not connected~n", [User]);
+        <<"subscribed">>->
+            User=maps:get(<<"user">>, Map),
+            ToUser=maps:get(<<"toUser">>, Map),
+            io:format("user ~s subscribed to user ~s~n", [User, ToUser]);
+        <<"unable to subscribe">>->
+            User=maps:get(<<"user">>, Map),
+            ToUser=maps:get(<<"toUser">>, Map),
+            io:format("user ~s unable to subscribe to user ~s~n", [User, ToUser]);
+        <<"sent">>->
+            io:format("tweet sent~n");
+        <<"got tweets">>->
+            io:format("Got tweets:~n"),
+            Tweets=maps:get(<<"tweets">>, Map),
+            [printTweet(X) || X <- Tweets];
+        <<"hash found">>->
+            io:format("Got tweets:~n"),
+            Tweets=maps:get(<<"tweets">>, Map),
+            [printTweet(X) || X <- Tweets];
+        <<"hash not found">>->
+            io:format("Hash not found~n");
+        <<"mention found">>->
+            io:format("Got tweets:~n"),
+            Tweets=maps:get(<<"tweets">>, Map),
+            [printTweet(X) || X <- Tweets];
+        <<"mention not found">>->
+            io:format("mention not found~n");
+        <<"new tweet">>->
+            io:format("New tweets:~n"),
+            printTweet(Map);
+        _->io:format("~w", [Map])
+    end.
+
+printTweet(Map)->
+    Tweet=maps:get(<<"tweet">>, Map),
+    Id=maps:get(<<"tid">>, Map),
+    Auth=maps:get(<<"from">>, Map),
+    io:format("     Tweet: ~s~n", [Tweet]),
+    io:format("     Id: ~w~n", [Id]),
+    io:format("     Author: ~s~n", [Auth]).
 
